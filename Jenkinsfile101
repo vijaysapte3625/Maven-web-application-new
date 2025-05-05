@@ -1,0 +1,63 @@
+pipeline {
+    agent any
+
+    environment {
+        MAVEN_HOME = tool 'Maven 3'
+    }
+    tools {
+        terraform 'Terraform'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                git branch: 'develop', url: 'https://github.com/hanzel-sc/maven-web-application.git'
+            }
+        }
+
+
+stage('Terraform Apply') {
+    steps {
+        script {
+            withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                dir('infrastructure') {
+                    def tfHome = tool 'Terraform'
+                    sh "${tfHome}/terraform init"
+                    sh "${tfHome}/terraform apply -auto-approve"
+                }
+            }
+        }
+    }
+}
+
+
+
+        stage('Build') {
+            steps {
+                script {
+                    if (isUnix()) {
+                        // Linux commands
+                        sh "${MAVEN_HOME}/bin/mvn test"
+                        sh "${MAVEN_HOME}/bin/mvn clean verify"
+                        sh "${MAVEN_HOME}/bin/mvn clean install"
+                    } else {
+                        // Windows commands
+                        bat "${MAVEN_HOME}\\bin\\mvn test"
+                        bat "${MAVEN_HOME}\\bin\\mvn clean verify"
+                        bat "${MAVEN_HOME}\\bin\\mvn clean install"
+                    }
+                }
+            }
+        }
+
+                stage('Push Artifact') {
+            steps {
+                sh """
+                curl -v -u $NEXUS_CREDENTIALS \
+                --upload-file target/maven-web-application.jar \
+                $NEXUS_URL/repository/$NEXUS_REPO/maven-web-application.jar
+                """
+            }
+        }
+    }
+}
